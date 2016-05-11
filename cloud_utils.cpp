@@ -4,6 +4,7 @@
 #include <pcl-1.8/pcl/visualization/cloud_viewer.h>
 #include <string>
 #include <iostream>
+#include <stdio.h>
 #include <pcl-1.8/pcl/io/ply_io.h>
 #include <pcl-1.8/pcl/io/pcd_io.h>
 
@@ -41,20 +42,27 @@ namespace CloudUtils{
         std::ifstream in(txtPath.str().c_str());
         pcl::PointCloud<pcl::PointXYZ> cloud;
 
-        if (in.is_open())
+        if (in.is_open()){
             getline(in, data);
             while (!in.eof() ) {
                 std::vector<std::string> x;
                 boost::split(x,data, boost::is_any_of("\t "));
                 pcl::PointXYZ p;
-                p.x = atof(x[0].c_str());
-                p.y = atof(x[1].c_str());
-                p.z = atof(x[2].c_str());
+                std::stringstream ss;
+                ss << x[0];
+                ss >> p.x;
+                ss.clear();
+                ss << x[1];
+                ss >> p.y;
+                ss.clear();
+                ss << x[2];
+                ss >> p.z;
                 cloud.push_back(p);
                 getline(in, data);
             }
+            in.close();
+        }
 
-        in.close();
         cout << "Clouds saved: " << cloud.points.size() << endl;
         cout<<cloud.height<< " "<<cloud.width<<endl;
         pcl::io::savePLYFileBinary(plyPath.str(), cloud);

@@ -41,8 +41,6 @@ include_directories(${GTKMM_INCLUDE_DIRS})
 link_directories(${GTKMM_LIBRARY_DIRS} )
 
 
-
-
 add_executable (RS_scanner main.cpp cloud_utils.h cloud_utils.cpp )
 target_link_libraries (RS_scanner ${LIBS} ${GTK3_LIBRARIES}  ${GTKMM_LIBRARIES})
 
