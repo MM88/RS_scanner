@@ -8,15 +8,20 @@
 #include <iostream>
 #include <string>
 
+#include <gtkmm.h>
+
 using namespace pcl;
 using namespace std;
 using namespace cv;
 using namespace CloudUtils;
 using namespace rs;
 using namespace std;
+using namespace Gtk;
 
-void scan (){
 
+
+void on_scan_button_click()
+{
     // Turn on logging. We can separately enable logging to console or to file, and use different severity filters for each.
     rs::log_to_console(rs::log_severity::warn);
     //rs::log_to_file(rs::log_severity::debug, "librealsense.log");
@@ -55,7 +60,7 @@ void scan (){
         dev->set_option((rs::option)12, (double)16); //laser power //def 16
 
         // Capture frames to give autoexposure
-        for (int i = 0; i < 30; ++i) dev->wait_for_frames();
+        for (int i = 0; i < 10; ++i) dev->wait_for_frames();
 
         dev->wait_for_frames();
 
@@ -84,7 +89,6 @@ void scan (){
         rs::extrinsics depth_to_color = dev->get_extrinsics(rs::stream::depth, rs::stream::color);
         rs::intrinsics color_intrin = dev->get_stream_intrinsics(rs::stream::color);
         float scale = dev->get_depth_scale();
-        std::cout<<scale<<std::endl;
 
         for(int dy=0; dy<depth_intrin.height; ++dy)
         {
@@ -110,34 +114,53 @@ void scan (){
         myfile.close();
         dev->set_option((rs::option)12, (double)0);
 //        boost::this_thread::sleep (boost::posix_time::seconds (5));
+    }
+    std::cout << "done scanning." << std::endl;
 
+    return;
+
+}
+void on_proc_button_click(){
+    //    /* delete borders */
+////    int proc_num = 3;
+////    std::string filePath = "/home/miky/Scrivania/pCloud_0_filtered";
+////    CloudUtils::compute_boundaries (filePath, proc_num);
+//
+//    /* compute cloud resolution */
+////    pcl::PointCloud<pcl::PointXYZ>::Ptr cloud (new pcl::PointCloud<pcl::PointXYZ>);
+////    std::ostringstream sumCloud;
+////    sumCloud <<"/home/miky/Scrivania/pCloud_0.ply";
+////    pcl::io::loadPLYFile(sumCloud.str(), *cloud);
+////    cout<<CloudUtils::computeCloudResolution(cloud);
+//
+//    /* make ply from txt and filter */
+    for (int i=0;i<2;i++){
+        std::ostringstream filePath;
+        filePath << "/home/miky/Scrivania/nuvole/pCloud_"<<i;
+        CloudUtils::point_cloud_maker(filePath.str());
+        CloudUtils::point_cloud_filtering(filePath.str());
     }
 }
-int main() {
+int main(int argc, char *argv[])
+{
+    auto app = Gtk::Application::create( "org.gtkmm.examples.base");
 
-    scan();
+    Gtk::Window window;
+    Gtk::ButtonBox butbox;
+    Gtk::Button scan_button("Scan");
+    Gtk::Button process_button("Proc clouds");
 
+    window.set_default_size(100, 100);
+    window.set_position(Gtk::WIN_POS_CENTER);
+    scan_button.signal_clicked().connect(sigc::ptr_fun(&on_scan_button_click));
+    process_button.signal_clicked().connect(sigc::ptr_fun(&on_proc_button_click));
 
-    /* delete borders */
-//    int proc_num = 3;
-//    std::string filePath = "/home/miky/Scrivania/pCloud_0_filtered";
-//    CloudUtils::compute_boundaries (filePath, proc_num);
+    scan_button.show();
+    process_button.show();
+    butbox.add(scan_button);
+    butbox.add(process_button);
+    butbox.show();
+    window.add(butbox);
 
-    /* compute cloud resolution */
-//    pcl::PointCloud<pcl::PointXYZ>::Ptr cloud (new pcl::PointCloud<pcl::PointXYZ>);
-//    std::ostringstream sumCloud;
-//    sumCloud <<"/home/miky/Scrivania/pCloud_0.ply";
-//    pcl::io::loadPLYFile(sumCloud.str(), *cloud);
-//    cout<<CloudUtils::computeCloudResolution(cloud);
-
-    /* make ply from txt and filter */
-//    for (int i=0;i<2;i++){
-//        std::ostringstream filePath;
-//        filePath << "/home/miky/Scrivania/nuvole/pCloud_"<<i;
-//        CloudUtils::point_cloud_maker(filePath.str());
-//        CloudUtils::point_cloud_filtering(filePath.str());
-//    }
-
-
-    return 0;
+    return app->run(window);
 }

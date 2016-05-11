@@ -42,8 +42,8 @@ namespace CloudUtils{
         pcl::PointCloud<pcl::PointXYZ> cloud;
 
         if (in.is_open())
+            getline(in, data);
             while (!in.eof() ) {
-                getline(in, data);
                 std::vector<std::string> x;
                 boost::split(x,data, boost::is_any_of("\t "));
                 pcl::PointXYZ p;
@@ -51,6 +51,7 @@ namespace CloudUtils{
                 p.y = atof(x[1].c_str());
                 p.z = atof(x[2].c_str());
                 cloud.push_back(p);
+                getline(in, data);
             }
 
         in.close();
