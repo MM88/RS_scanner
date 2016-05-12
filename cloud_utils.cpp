@@ -59,6 +59,7 @@ namespace CloudUtils{
                 ss >> p.z;
                 cloud.push_back(p);
                 getline(in, data);
+
             }
             in.close();
         }

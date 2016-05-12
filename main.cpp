@@ -19,7 +19,6 @@ using namespace std;
 using namespace Gtk;
 
 
-
 void on_scan_button_click()
 {
     // Turn on logging. We can separately enable logging to console or to file, and use different severity filters for each.
@@ -53,32 +52,14 @@ void on_scan_button_click()
     }
 
     // This tutorial will access only a single device, but it is trivial to extend to multiple devices
+    std::vector<std::vector<rs::float3>> RSclouds;
 
     for(auto dev : devices)
     {
-
         dev->set_option((rs::option)12, (double)16); //laser power //def 16
-
         // Capture frames to give autoexposure
         for (int i = 0; i < 10; ++i) dev->wait_for_frames();
-
         dev->wait_for_frames();
-
-        std::ofstream myfile;
-
-        int fileno = 0;
-        bool success;
-        std::string fileName = "/home/miky/Scrivania/nuvole/pCloud_" + std::to_string(fileno)  + ".txt";
-        std::ofstream ifs(fileName, std::ios::in | std::ios::ate);
-        success = ifs.is_open();
-        while(success) {
-            fileno++;//increase by one to get a new file name
-            fileName.clear();
-            fileName = "/home/miky/Scrivania/nuvole/pCloud_" + std::to_string(fileno)  + ".txt";
-            std::ofstream ifs(fileName, std::ios::in | std::ios::ate);
-            success = ifs.is_open();
-        }
-        myfile.open(fileName, std::ios::app);
 
         // Retrieve our images
         const uint16_t * depth_image = (const uint16_t *)dev->get_frame_data(rs::stream::depth);
@@ -90,6 +71,7 @@ void on_scan_button_click()
         rs::intrinsics color_intrin = dev->get_stream_intrinsics(rs::stream::color);
         float scale = dev->get_depth_scale();
 
+        std::vector<rs::float3> point_cloud;
         for(int dy=0; dy<depth_intrin.height; ++dy)
         {
             for(int dx=0; dx<depth_intrin.width; ++dx)
@@ -107,15 +89,40 @@ void on_scan_button_click()
                 rs::float3 color_point = depth_to_color.transform(depth_point);
                 rs::float2 color_pixel = color_intrin.project(color_point);
 
-                myfile << depth_point.x << '\t' << depth_point.y << '\t' << depth_point.z << std::endl;
+                point_cloud.push_back(depth_point);
 
             }
         }
-        myfile.close();
+        RSclouds.push_back(point_cloud);
+
         dev->set_option((rs::option)12, (double)0);
 //        boost::this_thread::sleep (boost::posix_time::seconds (5));
     }
     std::cout << "done scanning." << std::endl;
+    std::cout << "saving clouds.." << std::endl;
+
+    for (int i=0;i<devices.size();i++){
+
+        std::ofstream myfile;
+        int fileno = 0;
+        bool success;
+        std::string fileName = "/home/miky/Scrivania/nuvole/pCloud_" + std::to_string(fileno)  + ".txt";
+        std::ofstream ifs(fileName, std::ios::in | std::ios::ate);
+        success = ifs.is_open();
+        while(success) {
+            fileno++;//increase by one to get a new file name
+            fileName.clear();
+            fileName = "/home/miky/Scrivania/nuvole/pCloud_" + std::to_string(fileno)  + ".txt";
+            std::ofstream ifs(fileName, std::ios::in | std::ios::ate);
+            success = ifs.is_open();
+        }
+        myfile.open(fileName, std::ios::app);
+        for (int j=0;j<RSclouds[i].size();j++)
+            myfile << RSclouds[i][j].x << '\t' << RSclouds[i][j].y << '\t' << RSclouds[i][j].z << std::endl;
+        myfile.close();
+    }
+
+    std::cout << "done saving." << std::endl;
 
     return;
 
