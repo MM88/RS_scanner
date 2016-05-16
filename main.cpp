@@ -57,8 +57,9 @@ void on_scan_button_click()
     for(auto dev : devices)
     {
         dev->set_option((rs::option)12, (double)16); //laser power //def 16
+
         // Capture frames to give autoexposure
-        for (int i = 0; i < 10; ++i) dev->wait_for_frames();
+        for (int i = 0; i < 30; ++i) dev->wait_for_frames();
         dev->wait_for_frames();
 
         // Retrieve our images
@@ -127,27 +128,30 @@ void on_scan_button_click()
     return;
 
 }
-void on_proc_button_click(){
-    //    /* delete borders */
-////    int proc_num = 3;
-////    std::string filePath = "/home/miky/Scrivania/pCloud_0_filtered";
-////    CloudUtils::compute_boundaries (filePath, proc_num);
-//
-//    /* compute cloud resolution */
-////    pcl::PointCloud<pcl::PointXYZ>::Ptr cloud (new pcl::PointCloud<pcl::PointXYZ>);
-////    std::ostringstream sumCloud;
-////    sumCloud <<"/home/miky/Scrivania/pCloud_0.ply";
-////    pcl::io::loadPLYFile(sumCloud.str(), *cloud);
-////    cout<<CloudUtils::computeCloudResolution(cloud);
-//
-//    /* make ply from txt and filter */
-    for (int i=0;i<2;i++){
-        std::ostringstream filePath;
-        filePath << "/home/miky/Scrivania/nuvole/pCloud_"<<i;
-        CloudUtils::point_cloud_maker(filePath.str());
-        CloudUtils::point_cloud_filtering(filePath.str());
+void on_proc_button_click() {
+
+
+    int cloud_num = 3;
+    int proc_num = 2; // times of border processing
+
+    for(int i=0;i<cloud_num;i++){
+        //    /* make ply from txt and filter */
+            std::ostringstream filePath;
+            filePath << "/home/miky/Scrivania/nuvole/pCloud_"<<i;
+            CloudUtils::point_cloud_maker(filePath.str());
+            CloudUtils::point_cloud_filtering(filePath.str());
+        //    /* delete borders */
+            filePath.str("");
+            filePath <<"/home/miky/Scrivania/nuvole/pCloud_"<<i<<"_filtered";
+            CloudUtils::delete_boundaries(filePath.str(), proc_num);
+        //  /* create mesh */
+            filePath.str("");
+            filePath <<"/home/miky/Scrivania/nuvole/pCloud_"<<i<<"_filtered_no_borders";
+            CloudUtils::triangulate_cloud(filePath.str());
     }
+
 }
+
 int main(int argc, char *argv[])
 {
     auto app = Gtk::Application::create( "org.gtkmm.examples.base");

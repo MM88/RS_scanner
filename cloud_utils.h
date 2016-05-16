@@ -13,7 +13,8 @@ namespace CloudUtils{
     void point_cloud_filtering(std::string filePath);
     void point_cloud_average(std::string filePath, int cloud_num);
     double computeCloudResolution(const pcl::PointCloud<pcl::PointXYZ>::ConstPtr& cloud);
-    void compute_boundaries (std::string filePath, int proc_num);
+    void delete_boundaries(std::string filePath, int proc_num);
+    void triangulate_cloud(std::string filePath);
 
 }
 

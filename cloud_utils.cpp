@@ -1,31 +1,32 @@
 //
 // Created by miky on 10/05/16.
 //
-#include <pcl-1.8/pcl/visualization/cloud_viewer.h>
-#include <string>
-#include <iostream>
-#include <stdio.h>
-#include <pcl-1.8/pcl/io/ply_io.h>
-#include <pcl-1.8/pcl/io/pcd_io.h>
-
-#include <pcl-1.8/pcl/filters/passthrough.h>
-#include <pcl-1.8/pcl/filters/statistical_outlier_removal.h>
-#include <pcl-1.8/pcl/filters/voxel_grid.h>
-#include <pcl-1.8/pcl/surface/mls.h>
-#include <boost/thread.hpp>
-#include <cv.h>
-#include <highgui.h>
-#include <vector>
-#include <opencv2/imgproc.hpp>
-#include <opencv2/highgui.hpp>
-
-#include <pcl/PCLPointCloud2.h>
+#include <pcl/point_types.h>
 #include <pcl/io/pcd_io.h>
-#include <pcl/features/boundary.h>
-#include <pcl/console/print.h>
-#include <pcl/console/parse.h>
-#include <pcl/console/time.h>
+#include <pcl/io/ply_io.h>
+#include <pcl/io/vtk_lib_io.h>
+#include <pcl/kdtree/kdtree_flann.h>
 #include <pcl/features/normal_3d.h>
+#include <pcl/surface/gp3.h>
+#include <pcl/io/vtk_io.h>
+#include <pcl/surface/mls.h>
+#include <pcl/filters/statistical_outlier_removal.h>
+#include <pcl/filters/voxel_grid.h>
+#include <pcl/console/parse.h>
+#include <pcl/surface/concave_hull.h>
+#include <pcl/surface/vtk_smoothing/vtk_mesh_smoothing_laplacian.h>
+#include <pcl/surface/vtk_smoothing/vtk_utils.h>
+#include <pcl/visualization/pcl_visualizer.h>
+#include <pcl/surface/vtk_smoothing/vtk_mesh_smoothing_windowed_sinc.h>
+#include <pcl/surface/vtk_smoothing/vtk_mesh_subdivision.h>
+#include <pcl/visualization/cloud_viewer.h>
+#include <pcl/filters/passthrough.h>
+#include <cv.h>
+#include <pcl/features/boundary.h>
+#include <pcl/console/time.h>
+#include <pcl/registration/transforms.h>
+#include <pcl/surface/vtk_smoothing/vtk_utils.h>
+
 
 namespace CloudUtils{
 
@@ -84,19 +85,19 @@ namespace CloudUtils{
         pass.setInputCloud(cloud1) ;
 
         pass.setFilterFieldName("z" ) ;
-        pass.setFilterLimits(0.15,0.35);
+        pass.setFilterLimits(0.0,0.35);
     //    pass.setFilterLimits(2000,3500);
         pass.filter(*cloudfiltered);
 
         pass.setInputCloud(cloudfiltered) ;
         pass.setFilterFieldName("x" ) ;
-        pass.setFilterLimits(-0.2, 0.12);
+        pass.setFilterLimits(-0.17, 0.12);
     //    pass.setFilterLimits(-2000, 1200);
         pass.filter(*cloudfiltered);
     //
         pass.setInputCloud(cloudfiltered) ;
         pass.setFilterFieldName("y" ) ;
-        pass.setFilterLimits(-0.09, 0.6);
+        pass.setFilterLimits(-0.09, 0.2);
     //    pass.setFilterLimits(-900, 2000);
         pass.filter(*cloudfiltered);
 
@@ -104,12 +105,31 @@ namespace CloudUtils{
         pcl::StatisticalOutlierRemoval<pcl::PointXYZ> sor;
         sor.setInputCloud (cloudfiltered);
         sor.setMeanK (20);
-        sor.setStddevMulThresh (1.0);
+        sor.setStddevMulThresh (0.2);
         sor.filter (*cloudfiltered2);
+
+
+        //MLS SMOOTHING
+
+        MovingLeastSquares<PointXYZ, PointXYZ> mls;
+        mls.setInputCloud (cloudfiltered2);
+        mls.setSearchRadius (0.004);
+        mls.setPolynomialFit (true);
+        mls.setPolynomialOrder (2);
+        PointCloud<PointXYZ>::Ptr cloud_smoothed (new PointCloud<PointXYZ> ());
+        mls.process (*cloud_smoothed);
+        //remove nans
+        for(int i=0;i<cloud_smoothed->points.size();i++){
+            if (!(pcl::isFinite(cloud_smoothed->at(i)))){
+                cloud_smoothed->at(i).x = 0.0;
+                cloud_smoothed->at(i).y = 0.0;
+                cloud_smoothed->at(i).z = 0.0;
+            }
+        }
 
         std::ostringstream filteredCloud;
         filteredCloud << filePath<<"_filtered.ply";
-        pcl::io::savePLYFileBinary(filteredCloud.str(), *cloudfiltered2);
+        pcl::io::savePLYFileBinary(filteredCloud.str(), *cloud_smoothed);
 
     }
 
@@ -176,7 +196,7 @@ namespace CloudUtils{
 
 
     void
-    compute_boundaries (std::string filePath, int proc_num)
+    delete_boundaries(std::string filePath, int proc_num)
     {
         pcl::PointCloud<pcl::PointXYZ>::Ptr in_cloud(new pcl::PointCloud<pcl::PointXYZ>);
         std::ostringstream inFile;
@@ -195,13 +215,13 @@ namespace CloudUtils{
             ne.setInputCloud (out_cloud);
             pcl::search::KdTree<pcl::PointXYZ>::Ptr tree (new pcl::search::KdTree<pcl::PointXYZ> ());
             ne.setSearchMethod (tree);
-            ne.setRadiusSearch (0.02);
+            ne.setRadiusSearch (0.002);
             ne.compute (*normals);
             pcl::PointCloud<pcl::Boundary> boundaries;
             pcl::BoundaryEstimation<pcl::PointXYZ, pcl::Normal, pcl::Boundary> est;
             est.setInputCloud (out_cloud);
             est.setInputNormals (normals);
-            est.setRadiusSearch (0.02);
+            est.setRadiusSearch (0.002);
             est.setSearchMethod (pcl::search::KdTree<pcl::PointXYZ>::Ptr (new pcl::search::KdTree<pcl::PointXYZ>));
             est.compute (boundaries);
 
@@ -215,7 +235,66 @@ namespace CloudUtils{
                 }
             }
             pcl::io::savePLYFileBinary(outFile.str(), *out_cloud);
+//            cout<< " "<<i<<" border deleted"<<endl;
         }
     }
+    void
+    triangulate_cloud(std::string filePath){
+
+        std::ostringstream inFile;
+        inFile << filePath <<".ply";
+        pcl::PointCloud<pcl::PointXYZ>::Ptr cloud (new pcl::PointCloud<pcl::PointXYZ>);
+        pcl::io::loadPLYFile (inFile.str().c_str(), *cloud);
+        pcl::PointCloud<pcl::PointXYZ>::Ptr cloudfiltered(new pcl::PointCloud<pcl::PointXYZ>);
+        pcl::StatisticalOutlierRemoval<pcl::PointXYZ> sor;
+        sor.setInputCloud (cloud);
+        sor.setMeanK (50);
+        sor.setStddevMulThresh (2.5);
+        sor.filter (*cloudfiltered);
+        // Normal estimation*
+        pcl::NormalEstimation<pcl::PointXYZ, pcl::Normal> n;
+        pcl::PointCloud<pcl::Normal>::Ptr normals (new pcl::PointCloud<pcl::Normal>);
+        pcl::search::KdTree<pcl::PointXYZ>::Ptr tree (new pcl::search::KdTree<pcl::PointXYZ>);
+        tree->setInputCloud (cloudfiltered);
+        n.setInputCloud (cloudfiltered);
+        n.setSearchMethod (tree);
+        n.setKSearch (50);
+        n.compute (*normals);
+        // Concatenate the XYZ and normal fields*
+        pcl::PointCloud<pcl::PointNormal>::Ptr cloud_with_normals (new pcl::PointCloud<pcl::PointNormal>);
+        pcl::concatenateFields (*cloudfiltered, *normals, *cloud_with_normals);
+        //* cloud_with_normals = cloud + normals
+        // Create search tree*
+        pcl::search::KdTree<pcl::PointNormal>::Ptr tree2 (new pcl::search::KdTree<pcl::PointNormal>);
+        tree2->setInputCloud (cloud_with_normals);
+        // Initialize objects
+        pcl::GreedyProjectionTriangulation<pcl::PointNormal> gp3;
+        pcl::PolygonMesh triangles;
+        // Set the maximum distance between connected points (maximum edge length)
+        gp3.setSearchRadius (0.025);
+        // Set typical values for the parameters
+        gp3.setMu (2.5);
+        gp3.setMaximumNearestNeighbors (100);
+        gp3.setMaximumSurfaceAngle(M_PI/4);
+        gp3.setMinimumAngle(M_PI/18); // 10 degrees
+        gp3.setMaximumAngle(2*M_PI/3); // 120 degrees
+        gp3.setNormalConsistency(false);
+        gp3.setConsistentVertexOrdering(true);
+        // Get result
+        gp3.setInputCloud (cloud_with_normals);
+        gp3.setSearchMethod (tree2);
+        gp3.reconstruct (triangles);
+        // Additional vertex information
+        std::vector<int> parts = gp3.getPartIDs();
+        std::vector<int> states = gp3.getPointStates();
+
+        std::ostringstream smooth_meshPath;
+        smooth_meshPath << filePath<<"_mesh.ply";
+        pcl::io::savePolygonFile(smooth_meshPath.str().c_str(), triangles);
+
+
+    }
+
+
 
 }
