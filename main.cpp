@@ -2,13 +2,8 @@
 #include <cv.h>
 #include "cloud_utils.h"
 #include <librealsense/rs.hpp>
-#include <cstdio>
-#include <fstream>
-#include <boost/thread.hpp>
-#include <iostream>
-#include <string>
-
 #include <gtkmm.h>
+#include <time.h>
 
 using namespace pcl;
 using namespace std;
@@ -44,24 +39,25 @@ void on_scan_button_click()
         dev->enable_stream(rs::stream::depth, rs::preset::best_quality);
         dev->enable_stream(rs::stream::color, rs::preset::best_quality);
         dev->start();
-        dev->set_option((rs::option)12, (double)0); //laser power //def 16
-        dev->set_option((rs::option)13, (double)1);  //accuracy //def 2 meglio mesh butterata ma senza ondine
-        dev->set_option((rs::option)15, (double)5); //filter option  (1 3 4 ) //def 5 Moderate smoothing effect optimized for distances between 550mm to 850mm for F200 to balance between good sharpness level, high accuracy and moderate noise artifacts.
-
+        dev->set_option((rs::option)12, (double)0); //laser power
+        dev->set_option((rs::option)13, (double)1);  //accuracy
+        dev->set_option((rs::option)15, (double)5); //filter option
         std::cout << "done." << std::endl;
     }
 
     // This tutorial will access only a single device, but it is trivial to extend to multiple devices
     std::vector<std::vector<rs::float3>> RSclouds;
 
+    const clock_t begin_time = clock(); //to check grabbing time
+
     for(auto dev : devices)
     {
-        dev->set_option((rs::option)12, (double)16); //laser power //def 16
+        dev->set_option((rs::option)12, (double)16);
 
         // Capture frames to give autoexposure
-        for (int i = 0; i < 30; ++i) dev->wait_for_frames();
-        dev->wait_for_frames();
+        for (int i = 0; i < 15; ++i) dev->wait_for_frames();
 
+        dev->wait_for_frames();
         // Retrieve our images
         const uint16_t * depth_image = (const uint16_t *)dev->get_frame_data(rs::stream::depth);
         const uint8_t * color_image = (const uint8_t *)dev->get_frame_data(rs::stream::color);
@@ -99,11 +95,11 @@ void on_scan_button_click()
         dev->set_option((rs::option)12, (double)0);
 //        boost::this_thread::sleep (boost::posix_time::seconds (5));
     }
+    std::cout << float( clock () - begin_time ) /  CLOCKS_PER_SEC<<endl;
     std::cout << "done scanning." << std::endl;
     std::cout << "saving clouds.." << std::endl;
 
     for (int i=0;i<devices.size();i++){
-
         std::ofstream myfile;
         int fileno = 0;
         bool success;
@@ -131,23 +127,46 @@ void on_scan_button_click()
 void on_proc_button_click() {
 
 
-    int cloud_num = 3;
-    int proc_num = 2; // times of border processing
+    int cloud_num = 1;
+    int proc_num = 3; // times of border processing
 
     for(int i=0;i<cloud_num;i++){
-        //    /* make ply from txt and filter */
+            /* make ply from txt and filter */
             std::ostringstream filePath;
             filePath << "/home/miky/Scrivania/nuvole/pCloud_"<<i;
             CloudUtils::point_cloud_maker(filePath.str());
             CloudUtils::point_cloud_filtering(filePath.str());
-        //    /* delete borders */
+            /* delete borders */
             filePath.str("");
-            filePath <<"/home/miky/Scrivania/nuvole/pCloud_"<<i<<"_filtered";
+            filePath <<"/home/miky/Scrivania/nuvole/pCloud_"<<i<<"_f";
             CloudUtils::delete_boundaries(filePath.str(), proc_num);
-        //  /* create mesh */
+            /* smooth points */
             filePath.str("");
-            filePath <<"/home/miky/Scrivania/nuvole/pCloud_"<<i<<"_filtered_no_borders";
+            filePath <<"/home/miky/Scrivania/nuvole/pCloud_"<<i<<"_f_nb";
+            CloudUtils::point_cloud_smoothing(filePath.str());
+            /* create mesh */
+            filePath.str("");
+            filePath <<"/home/miky/Scrivania/nuvole/pCloud_"<<i<<"_f_nb_s";
             CloudUtils::triangulate_cloud(filePath.str());
+    }
+
+    //delete temp clouds
+    for (int i=0;i<cloud_num;i++){
+        std::ostringstream filePath;
+        filePath << "/home/miky/Scrivania/nuvole/pCloud_"<<i<<".txt";
+        std::remove(filePath.str().c_str());
+        filePath.str("");
+        filePath << "/home/miky/Scrivania/nuvole/pCloud_"<<i<<".ply";
+        std::remove(filePath.str().c_str());
+        filePath.str("");
+        filePath <<"/home/miky/Scrivania/nuvole/pCloud_"<<i<<"_f"<<".ply";
+        std::remove(filePath.str().c_str());
+        filePath.str("");
+        filePath <<"/home/miky/Scrivania/nuvole/pCloud_"<<i<<"_f_nb"<<".ply";
+        std::remove(filePath.str().c_str());
+        filePath.str("");
+        filePath <<"/home/miky/Scrivania/nuvole/pCloud_"<<i<<"_f_nb_s"<<".ply";
+        std::remove(filePath.str().c_str());
     }
 
 }

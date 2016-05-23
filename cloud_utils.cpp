@@ -71,34 +71,29 @@ namespace CloudUtils{
         return cloud;
     }
 
-    void point_cloud_filtering(std::string filePath){
-
+    void
+    point_cloud_filtering(std::string filePath){
 
         pcl::PointCloud<pcl::PointXYZ>::Ptr cloud1 (new pcl::PointCloud<pcl::PointXYZ>);
         std::ostringstream plyPath;
         plyPath << filePath << ".ply";
         pcl::io::loadPLYFile (plyPath.str(), *cloud1);
-
         pcl::PointCloud<pcl::PointXYZ>::Ptr cloudfiltered(new pcl::PointCloud<pcl::PointXYZ>);
-
         pcl::PassThrough<pcl::PointXYZ> pass ;
         pass.setInputCloud(cloud1) ;
 
         pass.setFilterFieldName("z" ) ;
         pass.setFilterLimits(0.0,0.35);
-    //    pass.setFilterLimits(2000,3500);
         pass.filter(*cloudfiltered);
 
         pass.setInputCloud(cloudfiltered) ;
         pass.setFilterFieldName("x" ) ;
         pass.setFilterLimits(-0.17, 0.12);
-    //    pass.setFilterLimits(-2000, 1200);
         pass.filter(*cloudfiltered);
-    //
+
         pass.setInputCloud(cloudfiltered) ;
         pass.setFilterFieldName("y" ) ;
         pass.setFilterLimits(-0.09, 0.2);
-    //    pass.setFilterLimits(-900, 2000);
         pass.filter(*cloudfiltered);
 
         pcl::PointCloud<pcl::PointXYZ>::Ptr cloudfiltered2(new pcl::PointCloud<pcl::PointXYZ>);
@@ -108,11 +103,21 @@ namespace CloudUtils{
         sor.setStddevMulThresh (0.2);
         sor.filter (*cloudfiltered2);
 
+        std::ostringstream filteredCloud;
+        filteredCloud << filePath<<"_f.ply";
+        pcl::io::savePLYFileBinary(filteredCloud.str(), *cloudfiltered2);
+    }
 
+    void
+    point_cloud_smoothing(std::string filePath){
+
+        pcl::PointCloud<pcl::PointXYZ>::Ptr cloud1 (new pcl::PointCloud<pcl::PointXYZ>);
+        std::ostringstream plyPath;
+        plyPath << filePath << ".ply";
+        pcl::io::loadPLYFile (plyPath.str(), *cloud1);
         //MLS SMOOTHING
-
         MovingLeastSquares<PointXYZ, PointXYZ> mls;
-        mls.setInputCloud (cloudfiltered2);
+        mls.setInputCloud (cloud1);
         mls.setSearchRadius (0.004);
         mls.setPolynomialFit (true);
         mls.setPolynomialOrder (2);
@@ -126,14 +131,13 @@ namespace CloudUtils{
                 cloud_smoothed->at(i).z = 0.0;
             }
         }
-
         std::ostringstream filteredCloud;
-        filteredCloud << filePath<<"_filtered.ply";
+        filteredCloud << filePath<<"_s.ply";
         pcl::io::savePLYFileBinary(filteredCloud.str(), *cloud_smoothed);
-
     }
 
-    void point_cloud_average(std::string filePath, int cloud_num){
+    void
+    point_cloud_average(std::string filePath, int cloud_num){
 
         pcl::PointCloud<pcl::PointXYZ>::Ptr avg_cloud(new pcl::PointCloud<pcl::PointXYZ>);
         pcl::PointCloud<pcl::PointXYZ>::Ptr sum_cloud(new pcl::PointCloud<pcl::PointXYZ>);
@@ -144,7 +148,7 @@ namespace CloudUtils{
 
         for (int i=0; i<cloud_num; i++){
             std::ostringstream plyPath;
-            plyPath << filePath<< i <<"_filtered.ply";
+            plyPath << filePath<< i <<"_f.ply";
             pcl::PointCloud<pcl::PointXYZ>::Ptr tmp_cloud (new pcl::PointCloud<pcl::PointXYZ>);
             pcl::io::loadPLYFile (plyPath.str(), *tmp_cloud);
             cloud_vector.push_back(tmp_cloud);
@@ -160,7 +164,6 @@ namespace CloudUtils{
         std::ostringstream sumCloud;
         sumCloud << filePath<<"_sum.ply";
         pcl::io::savePLYFileBinary(sumCloud.str(), *avg_cloud);
-
 
     }
 
@@ -203,7 +206,7 @@ namespace CloudUtils{
         inFile << filePath <<".ply";
         pcl::io::loadPLYFile(inFile.str(), *in_cloud);
         std::ostringstream outFile;
-        outFile << filePath <<"_no_borders.ply";
+        outFile << filePath <<"_nb.ply";
         pcl::io::savePLYFileBinary(outFile.str(),*in_cloud);
 
         for (int i=0;i<proc_num;i++){
@@ -238,6 +241,7 @@ namespace CloudUtils{
 //            cout<< " "<<i<<" border deleted"<<endl;
         }
     }
+
     void
     triangulate_cloud(std::string filePath){
 
@@ -263,8 +267,6 @@ namespace CloudUtils{
         // Concatenate the XYZ and normal fields*
         pcl::PointCloud<pcl::PointNormal>::Ptr cloud_with_normals (new pcl::PointCloud<pcl::PointNormal>);
         pcl::concatenateFields (*cloudfiltered, *normals, *cloud_with_normals);
-        //* cloud_with_normals = cloud + normals
-        // Create search tree*
         pcl::search::KdTree<pcl::PointNormal>::Ptr tree2 (new pcl::search::KdTree<pcl::PointNormal>);
         tree2->setInputCloud (cloud_with_normals);
         // Initialize objects
@@ -287,14 +289,11 @@ namespace CloudUtils{
         // Additional vertex information
         std::vector<int> parts = gp3.getPartIDs();
         std::vector<int> states = gp3.getPointStates();
-
         std::ostringstream smooth_meshPath;
         smooth_meshPath << filePath<<"_mesh.ply";
-        pcl::io::savePolygonFile(smooth_meshPath.str().c_str(), triangles);
-
+        pcl::io::savePolygonFile(smooth_meshPath.str().c_str(), triangles,false);
 
     }
-
 
 
 }

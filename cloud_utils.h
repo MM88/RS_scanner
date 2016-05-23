@@ -15,6 +15,7 @@ namespace CloudUtils{
     double computeCloudResolution(const pcl::PointCloud<pcl::PointXYZ>::ConstPtr& cloud);
     void delete_boundaries(std::string filePath, int proc_num);
     void triangulate_cloud(std::string filePath);
+    void point_cloud_smoothing(std::string filePath);
 
 }
 
