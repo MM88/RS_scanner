@@ -4,6 +4,7 @@
 #include <librealsense/rs.hpp>
 #include <gtkmm.h>
 #include <time.h>
+#include "CloudProcessing.h"
 
 using namespace pcl;
 using namespace std;
@@ -13,6 +14,7 @@ using namespace rs;
 using namespace std;
 using namespace Gtk;
 
+int dev_number;
 
 void on_scan_button_click()
 {
@@ -24,6 +26,8 @@ void on_scan_button_click()
     rs::context ctx;
     printf("There are %d connected RealSense devices.\n", ctx.get_device_count());
     if(ctx.get_device_count() == 0) return;
+
+    dev_number = ctx.get_device_count();
 
     // Enumerate all devices
     std::vector<rs::device *> devices;
@@ -126,48 +130,49 @@ void on_scan_button_click()
 }
 void on_proc_button_click() {
 
-
-    int cloud_num = 1;
-    int proc_num = 3; // times of border processing
+    int cloud_num = 2; //dev_number;
 
     for(int i=0;i<cloud_num;i++){
-            /* make ply from txt and filter */
-            std::ostringstream filePath;
-            filePath << "/home/miky/Scrivania/nuvole/pCloud_"<<i;
-            CloudUtils::point_cloud_maker(filePath.str());
-            CloudUtils::point_cloud_filtering(filePath.str());
-            /* delete borders */
-            filePath.str("");
-            filePath <<"/home/miky/Scrivania/nuvole/pCloud_"<<i<<"_f";
-            CloudUtils::delete_boundaries(filePath.str(), proc_num);
-            /* smooth points */
-            filePath.str("");
-            filePath <<"/home/miky/Scrivania/nuvole/pCloud_"<<i<<"_f_nb";
-            CloudUtils::point_cloud_smoothing(filePath.str());
-            /* create mesh */
-            filePath.str("");
-            filePath <<"/home/miky/Scrivania/nuvole/pCloud_"<<i<<"_f_nb_s";
-            CloudUtils::triangulate_cloud(filePath.str());
-    }
 
-    //delete temp clouds
-    for (int i=0;i<cloud_num;i++){
-        std::ostringstream filePath;
-        filePath << "/home/miky/Scrivania/nuvole/pCloud_"<<i<<".txt";
-        std::remove(filePath.str().c_str());
-        filePath.str("");
-        filePath << "/home/miky/Scrivania/nuvole/pCloud_"<<i<<".ply";
-        std::remove(filePath.str().c_str());
-        filePath.str("");
-        filePath <<"/home/miky/Scrivania/nuvole/pCloud_"<<i<<"_f"<<".ply";
-        std::remove(filePath.str().c_str());
-        filePath.str("");
-        filePath <<"/home/miky/Scrivania/nuvole/pCloud_"<<i<<"_f_nb"<<".ply";
-        std::remove(filePath.str().c_str());
-        filePath.str("");
-        filePath <<"/home/miky/Scrivania/nuvole/pCloud_"<<i<<"_f_nb_s"<<".ply";
-        std::remove(filePath.str().c_str());
+        std::ostringstream inPath;
+        inPath << "/home/miky/Scrivania/nuvole/pCloud_" <<i<<".txt";
+        std::ostringstream outPath;
+        outPath << "/home/miky/Scrivania/nuvole/pCloud_"<<i<<".ply";
+
+        CloudProcessing cp;
+        cp.setNum_border_to_remove(3);
+        cp.setFiltering(true);
+        cp.setSmoothing(true);
+        cp.setRemove_border(true);
+        cp.setTxt_path(inPath.str().c_str());
+        cp.setOutPath(outPath.str().c_str());
+        cp.processCloud();
+
     }
+//    int cloud_num = 1; //= dev_numver; // num of cameras/cloud to grab
+//    int proc_num = 3; // times of border processing
+//
+//    for(int i=0;i<cloud_num;i++){
+//            /* make ply from txt and filter */
+//            std::ostringstream filePath;
+//            filePath << "/home/miky/Scrivania/nuvole/pCloud_"<<i;
+//            CloudUtils::point_cloud_maker(filePath.str());
+//            CloudUtils::point_cloud_filtering(filePath.str());
+//            /* delete borders */
+//            filePath.str("");
+//            filePath <<"/home/miky/Scrivania/nuvole/pCloud_"<<i<<"_f";
+//            CloudUtils::delete_boundaries(filePath.str(), proc_num);
+//            /* smooth points */
+//            filePath.str("");
+//            filePath <<"/home/miky/Scrivania/nuvole/pCloud_"<<i<<"_f_nb";
+//            CloudUtils::point_cloud_smoothing(filePath.str());
+//            /* create mesh */
+//            filePath.str("");
+//            filePath <<"/home/miky/Scrivania/nuvole/pCloud_"<<i<<"_f_nb_s";
+//            CloudUtils::triangulate_cloud(filePath.str());
+//    }
+//
+
 
 }
 
