@@ -31,7 +31,6 @@ public:
 
     virtual ~CloudProcessing() { }
     CloudProcessing() {
-
     }
 
     void setTxt_path(const string &txt_path) {
