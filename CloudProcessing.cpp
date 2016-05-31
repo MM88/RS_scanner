@@ -25,6 +25,7 @@
 #include <pcl/features/boundary.h>
 #include <pcl/console/time.h>
 #include <pcl/registration/transforms.h>
+#include <pcl/io/ply_io.h>
 
 
 #include "CloudProcessing.h"
@@ -79,6 +80,7 @@ void CloudProcessing::point_cloud_smoothing() {
         }
     }
     cloud = cloud_smoothed;
+
 }
 
 void CloudProcessing::point_cloud_filtering() {
@@ -105,6 +107,8 @@ void CloudProcessing::point_cloud_filtering() {
     sor.setMeanK (20);
     sor.setStddevMulThresh (0.2);
     sor.filter (*cloud);
+
+    pcl::io::savePLYFileBinary("/home/miky/Scrivania/nuvole/cloud_p.ply",*cloud);
 
 }
 

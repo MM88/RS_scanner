@@ -1,138 +1,36 @@
-#include <pcl-1.8/pcl/visualization/cloud_viewer.h>
+#include <pcl/visualization/cloud_viewer.h>
 #include <cv.h>
-#include "cloud_utils.h"
-#include <librealsense/rs.hpp>
 #include <gtkmm.h>
 #include <time.h>
 #include "CloudProcessing.h"
+#include <pcl/io/ply_io.h>
+#include <pcl/sample_consensus/method_types.h>
+#include <pcl/sample_consensus/model_types.h>
+#include <pcl/sample_consensus/sac_model_sphere.h>
+#include <pcl/sample_consensus/ransac.h>
+#include <pcl/segmentation/sac_segmentation.h>
+#include <pcl/filters/voxel_grid.h>
+#include <pcl/filters/extract_indices.h>
+#include "rs_grabber.h"
 
 using namespace pcl;
 using namespace std;
 using namespace cv;
-using namespace CloudUtils;
-using namespace rs;
 using namespace std;
 using namespace Gtk;
 
-int dev_number;
 
 void on_scan_button_click()
 {
-    // Turn on logging. We can separately enable logging to console or to file, and use different severity filters for each.
-    rs::log_to_console(rs::log_severity::warn);
-    //rs::log_to_file(rs::log_severity::debug, "librealsense.log");
-
-    // Create a context object. This object owns the handles to all connected realsense devices.
-    rs::context ctx;
-    printf("There are %d connected RealSense devices.\n", ctx.get_device_count());
-    if(ctx.get_device_count() == 0) return;
-
-    dev_number = ctx.get_device_count();
-
-    // Enumerate all devices
-    std::vector<rs::device *> devices;
-    for(int i=0; i<ctx.get_device_count(); ++i)
-    {
-        devices.push_back(ctx.get_device(i));
-    }
-
-    // Configure and start our devices
-    for(auto dev : devices)
-    {
-        std::cout << "Starting " << dev->get_name() << "... ";
-        dev->enable_stream(rs::stream::depth, rs::preset::best_quality);
-        dev->enable_stream(rs::stream::color, rs::preset::best_quality);
-        dev->start();
-        dev->set_option((rs::option)12, (double)0); //laser power
-        dev->set_option((rs::option)13, (double)1);  //accuracy
-        dev->set_option((rs::option)15, (double)5); //filter option
-        std::cout << "done." << std::endl;
-    }
-
-    // This tutorial will access only a single device, but it is trivial to extend to multiple devices
-    std::vector<std::vector<rs::float3>> RSclouds;
-
-    const clock_t begin_time = clock(); //to check grabbing time
-
-    for(auto dev : devices)
-    {
-        dev->set_option((rs::option)12, (double)16);
-
-        // Capture frames to give autoexposure
-        for (int i = 0; i < 15; ++i) dev->wait_for_frames();
-
-        dev->wait_for_frames();
-        // Retrieve our images
-        const uint16_t * depth_image = (const uint16_t *)dev->get_frame_data(rs::stream::depth);
-        const uint8_t * color_image = (const uint8_t *)dev->get_frame_data(rs::stream::color);
-
-        // Retrieve camera parameters for mapping between depth and color
-        rs::intrinsics depth_intrin = dev->get_stream_intrinsics(rs::stream::depth);
-        rs::extrinsics depth_to_color = dev->get_extrinsics(rs::stream::depth, rs::stream::color);
-        rs::intrinsics color_intrin = dev->get_stream_intrinsics(rs::stream::color);
-        float scale = dev->get_depth_scale();
-
-        std::vector<rs::float3> point_cloud;
-        for(int dy=0; dy<depth_intrin.height; ++dy)
-        {
-            for(int dx=0; dx<depth_intrin.width; ++dx)
-            {
-                // Retrieve the 16-bit depth value and map it into a depth in meters
-                uint16_t depth_value = depth_image[dy * depth_intrin.width + dx];
-                float depth_in_meters = depth_value * scale; //0.1*3.12352;// scale*10000/3.12352;
-
-                // Skip over pixels with a depth value of zero, which is used to indicate no data
-                if(depth_value == 0) continue;
-
-                // Map from pixel coordinates in the depth image to pixel coordinates in the color image
-                rs::float2 depth_pixel = {(float)dx, (float)dy};
-                rs::float3 depth_point = depth_intrin.deproject(depth_pixel, depth_in_meters);
-                rs::float3 color_point = depth_to_color.transform(depth_point);
-                rs::float2 color_pixel = color_intrin.project(color_point);
-
-                point_cloud.push_back(depth_point);
-
-            }
-        }
-        RSclouds.push_back(point_cloud);
-
-        dev->set_option((rs::option)12, (double)0);
-//        boost::this_thread::sleep (boost::posix_time::seconds (5));
-    }
-    std::cout << float( clock () - begin_time ) /  CLOCKS_PER_SEC<<endl;
-    std::cout << "done scanning." << std::endl;
-    std::cout << "saving clouds.." << std::endl;
-
-    for (int i=0;i<devices.size();i++){
-        std::ofstream myfile;
-        int fileno = 0;
-        bool success;
-        std::string fileName = "/home/miky/Scrivania/nuvole/pCloud_" + std::to_string(fileno)  + ".txt";
-        std::ofstream ifs(fileName, std::ios::in | std::ios::ate);
-        success = ifs.is_open();
-        while(success) {
-            fileno++;//increase by one to get a new file name
-            fileName.clear();
-            fileName = "/home/miky/Scrivania/nuvole/pCloud_" + std::to_string(fileno)  + ".txt";
-            std::ofstream ifs(fileName, std::ios::in | std::ios::ate);
-            success = ifs.is_open();
-        }
-        myfile.open(fileName, std::ios::app);
-        for (int j=0;j<RSclouds[i].size();j++)
-            myfile << RSclouds[i][j].x << '\t' << RSclouds[i][j].y << '\t' << RSclouds[i][j].z << std::endl;
-        myfile.close();
-    }
-
-    std::cout << "done saving." << std::endl;
-
-    return;
+    RSCloudGrabber::grab_clouds();
 
 }
+
 void on_proc_button_click() {
 
-    int cloud_num = 2; //dev_number;
+    int cloud_num = RSCloudGrabber::get_dev_number();
 
-    for(int i=0;i<cloud_num;i++){
+    for(int i=0;i<1;i++){
 
         std::ostringstream inPath;
         inPath << "/home/miky/Scrivania/nuvole/pCloud_" <<i<<".txt";
@@ -149,53 +47,110 @@ void on_proc_button_click() {
         cp.processCloud();
 
     }
-//    int cloud_num = 1; //= dev_numver; // num of cameras/cloud to grab
-//    int proc_num = 3; // times of border processing
-//
-//    for(int i=0;i<cloud_num;i++){
-//            /* make ply from txt and filter */
-//            std::ostringstream filePath;
-//            filePath << "/home/miky/Scrivania/nuvole/pCloud_"<<i;
-//            CloudUtils::point_cloud_maker(filePath.str());
-//            CloudUtils::point_cloud_filtering(filePath.str());
-//            /* delete borders */
-//            filePath.str("");
-//            filePath <<"/home/miky/Scrivania/nuvole/pCloud_"<<i<<"_f";
-//            CloudUtils::delete_boundaries(filePath.str(), proc_num);
-//            /* smooth points */
-//            filePath.str("");
-//            filePath <<"/home/miky/Scrivania/nuvole/pCloud_"<<i<<"_f_nb";
-//            CloudUtils::point_cloud_smoothing(filePath.str());
-//            /* create mesh */
-//            filePath.str("");
-//            filePath <<"/home/miky/Scrivania/nuvole/pCloud_"<<i<<"_f_nb_s";
-//            CloudUtils::triangulate_cloud(filePath.str());
-//    }
-//
+}
 
+void on_calib_button_click(){
 
+}
+boost::shared_ptr<pcl::visualization::PCLVisualizer>
+simpleVis (pcl::PointCloud<pcl::PointXYZ>::ConstPtr cloud)
+{
+    // --------------------------------------------
+    // -----Open 3D viewer and add point cloud-----
+    // --------------------------------------------
+    boost::shared_ptr<pcl::visualization::PCLVisualizer> viewer (new pcl::visualization::PCLVisualizer ("3D Viewer"));
+    viewer->setBackgroundColor (0, 0, 0);
+    viewer->addPointCloud<pcl::PointXYZ> (cloud, "sample cloud");
+    viewer->setPointCloudRenderingProperties (pcl::visualization::PCL_VISUALIZER_POINT_SIZE, 3, "sample cloud");
+    //viewer->addCoordinateSystem (1.0, "global");
+    viewer->initCameraParameters ();
+    return (viewer);
 }
 
 int main(int argc, char *argv[])
 {
-    auto app = Gtk::Application::create( "org.gtkmm.examples.base");
+
+    auto app = Gtk::Application::create();
 
     Gtk::Window window;
     Gtk::ButtonBox butbox;
     Gtk::Button scan_button("Scan");
     Gtk::Button process_button("Proc clouds");
+    Gtk::Button calib_button("Calibrazione");
 
     window.set_default_size(100, 100);
     window.set_position(Gtk::WIN_POS_CENTER);
     scan_button.signal_clicked().connect(sigc::ptr_fun(&on_scan_button_click));
     process_button.signal_clicked().connect(sigc::ptr_fun(&on_proc_button_click));
+    calib_button.signal_clicked().connect(sigc::ptr_fun(&on_calib_button_click));
 
     scan_button.show();
     process_button.show();
+    calib_button.show();
     butbox.add(scan_button);
     butbox.add(process_button);
+    butbox.add(calib_button);
     butbox.show();
     window.add(butbox);
 
     return app->run(window);
+
+
+    // CODICE PER TROVARE CENTRO SFERE
+
+//    pcl::PointCloud<pcl::PointXYZ>::Ptr cloud (new pcl::PointCloud<pcl::PointXYZ>);
+//    pcl::io::loadPLYFile("/home/miky/Scrivania/nuvole/cloud_p.ply",*cloud);
+//    Eigen::VectorXf sphere_params; //3D center and radius
+//
+////    pcl::SampleConsensusModelSphere<pcl::PointXYZ>::Ptr sphere_model ( new pcl::SampleConsensusModelSphere<pcl::PointXYZ>(cloud));
+////    pcl::RandomSampleConsensus<pcl::PointXYZ> ransac(sphere_model);
+////    ransac.setDistanceThreshold(.004);
+////    ransac.computeModel();
+////    ransac.getModelCoefficients(sphere_params);
+//
+//    pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_sphere (new pcl::PointCloud<pcl::PointXYZ>);
+//    cloud->is_dense = true;
+//
+//
+//
+//    // RANSAC objects: model and algorithm.
+//    pcl::SampleConsensusModelSphere<pcl::PointXYZ>::Ptr model(new pcl::SampleConsensusModelSphere<pcl::PointXYZ>(cloud));
+//    pcl::RandomSampleConsensus<pcl::PointXYZ> ransac(model);
+//    model->setRadiusLimits(0.03, 0.04);
+////    model->setRadiusLimits(0.01, 0.025);
+//    ransac.setMaxIterations(10000);
+//    ransac.setDistanceThreshold(.004);
+//    ransac.computeModel();
+//    ransac.getModelCoefficients(sphere_params);
+//    std::cout << "Sphere coefficients: " << sphere_params[0] << " " << sphere_params[1] << " " << sphere_params[2] << " " << sphere_params[3] << std::endl;
+//
+//    std::vector<int> inlierIndices;
+//    ransac.getInliers(inlierIndices);
+//    if (inlierIndices.size() == 0)
+//    {
+//        PCL_ERROR ("Could not estimate a sphere model for the given dataset. ");
+//        std::cerr << "No sphere found" << std::endl;
+//        //return (-1);
+//    }
+//    // Copy all inliers of the model to another cloud.
+//    pcl::copyPointCloud<pcl::PointXYZ>(*cloud, inlierIndices, *cloud_sphere);
+//
+//    // creates the visualization object and adds either our orignial cloud or all of the inliers
+//    // depending on the command line arguments specified.
+//    boost::shared_ptr<pcl::visualization::PCLVisualizer> viewer1, viewer2;
+//
+//    viewer1 = simpleVis(cloud_sphere);
+//
+//    while (!viewer1->wasStopped ())
+//    {
+//        viewer1->spinOnce (100);
+//        boost::this_thread::sleep (boost::posix_time::microseconds (100000));
+//    }
+
+//
+
+
+
+
 }
+
